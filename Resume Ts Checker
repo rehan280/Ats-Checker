@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ATS Resume Score Checker</title>
+<style>
+  :root{
+    --bg-1:#071029; --bg-2:#07153b;
+    --card:#0f2233; --muted:#9fb0c8;
+    --accent-1:#5b6ff7; --accent-2:#9b6bff;
+    --glass: rgba(255,255,255,0.03);
+    --success:#7ee787; --danger:#ff6b6b;
+    --soft: rgba(255,255,255,0.04);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg-1),var(--bg-2));color:#e6eef8}
+  .page{max-width:1180px;margin:28px auto;padding:20px}
+  header{display:flex;align-items:center;gap:16px}
+  .logo{width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--accent-1),var(--accent-2));display:flex;align-items:center;justify-content:center;font-weight:700;color:#021428}
+  h1{font-size:34px;margin:0}
+  .subtitle{color:var(--muted);margin-top:6px;font-size:14px}
+
+  .grid{display:grid;grid-template-columns:1fr 420px;gap:22px;margin-top:22px}
+  @media (max-width:1000px){ .grid{grid-template-columns:1fr} }
+
+  .card{background:linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.01));border:1px solid var(--soft);padding:18px;border-radius:12px}
+
+  /* left column elements */
+  .section-title{font-weight:700;margin-bottom:10px}
+  .paste-box{width:100%;min-height:220px;border-radius:10px;padding:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);color:inherit;resize:vertical}
+  .file-row{display:flex;gap:12px;align-items:center;margin-top:12px}
+  .file-input{display:none}
+  .file-label{display:inline-block;padding:10px 14px;border-radius:10px;border:1px dashed rgba(255,255,255,0.04);background:rgba(255,255,255,0.01);cursor:pointer;color:var(--muted)}
+  .controls{display:flex;gap:12px;align-items:center;margin-top:12px}
+  .btn{background:linear-gradient(90deg,var(--accent-1),var(--accent-2));color:#021428;padding:10px 14px;border-radius:10px;border:0;font-weight:700;cursor:pointer;box-shadow:0 8px 20px rgba(91,111,247,0.09)}
+  .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
+  .note{font-size:13px;color:var(--muted);margin-top:10px}
+
+  /* right column: results */
+  .score-box{display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:12px;background:linear-gradient(180deg,#071b2b,#061027);border:1px solid rgba(255,255,255,0.02)}
+  .score-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .score-meta{font-size:13px;color:var(--muted)}
+  .score-circle{width:120px;height:120px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:transparent;border:6px solid rgba(255,255,255,0.03);position:relative}
+  .score-num{font-size:28px;font-weight:800;color:var(--success)}
+  .progress-svg{position:absolute;left:0;top:0;width:100%;height:100%;transform:rotate(-90deg)}
+  .mini-card{background:rgba(255,255,255,0.02);padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.02)}
+  .suggestions{min-height:120px;color:var(--muted)}
+  .list{padding-left:18px;color:#cfe9ff}
+  .debug{background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;color:var(--muted);font-size:13px;max-height:160px;overflow:auto;margin-top:10px}
+
+  .footer-note{margin-top:12px;color:var(--muted);font-size:13px}
+  .warning{color:var(--danger);font-weight:700}
+
+  /* drag highlight */
+  .drag-over{outline:4px dashed rgba(155,107,255,0.25);outline-offset:6px}
+
+  /* small grid for features */
+  .features{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:24px}
+  @media (max-width:900px){ .features{grid-template-columns:1fr} }
+  .feature{padding:16px;border-radius:10px;background:rgba(255,255,255,0.01);border:1px solid rgba(255,255,255,0.02);text-align:center}
+  .feature h4{margin:6px 0 4px 0}
+  .muted{color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div class="logo">G</div>
+      <div>
+        <h1>ATS Resume Score Checker</h1>
+        <div class="subtitle">Get hired faster — AI scans for 30+ ATS criteria and gives instant improvements.</div>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- LEFT: Inputs -->
+      <div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div class="section-title">Paste Resume Text</div>
+              <div class="muted">Paste plain resume text here (or upload PDF below)</div>
+            </div>
+            <div class="score-meta">Model: <strong>gemini-2.0-flash</strong></div>
+          </div>
+
+          <textarea id="pasteBox" class="paste-box" placeholder="Paste your resume text here..."></textarea>
+
+          <div style="height:14px"></div>
+
+          <div class="section-title" style="margin-bottom:8px">Or Upload PDF Resume</div>
+          <label for="fileInput" class="file-label">Select PDF (max 5MB)</label>
+          <input id="fileInput" class="file-input" type="file" accept=".pdf,.docx,.doc,.txt" />
+
+          <div class="controls">
+            <button id="analyzeBtn" class="btn">Analyze Resume</button>
+            <button id="clearBtn" class="btn ghost">Clear</button>
+            <button id="downloadBtn" class="btn ghost">Download Report</button>
+            <button id="copyBtn" class="btn ghost">Copy Report</button>
+            <div style="margin-left:auto" class="muted">Status: <span id="status">idle</span></div>
+          </div>
+
+          <div class="note">Note: For production use, proxy requests to a backend and keep your API key secret.</div>
+        </div>
+
+        <div class="features">
+          <div class="feature">
+            <div style="font-size:22px;opacity:0.9">🔎</div>
+            <h4>30+ ATS Criteria</h4>
+            <div class="muted">Formatting, keywords, and structure checks</div>
+          </div>
+          <div class="feature">
+            <div style="font-size:22px;opacity:0.9">⚡</div>
+            <h4>Instant Results</h4>
+            <div class="muted">Get score and suggestions in seconds</div>
+          </div>
+          <div class="feature">
+            <div style="font-size:22px;opacity:0.9">🤖</div>
+            <h4>AI-Powered</h4>
+            <div class="muted">Latest language models for analysis</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Results -->
+      <div class="summary">
+        <div class="card score-box">
+          <div class="score-row">
+            <div>
+              <div class="score-meta">ATS Score</div>
+              <div style="height:8px"></div>
+              <div class="score-circle" id="scoreCircle">
+                <!-- SVG progress circle -->
+                <svg class="progress-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+                  <circle cx="50" cy="50" r="44" stroke="rgba(255,255,255,0.03)" stroke-width="6" fill="none"></circle>
+                  <circle id="progress" cx="50" cy="50" r="44" stroke="url(#grad)" stroke-width="6" stroke-linecap="round" fill="none" stroke-dasharray="276.46" stroke-dashoffset="276.46"></circle>
+                  <defs>
+                    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0" stop-color="#5b6ff7"/><stop offset="1" stop-color="#9b6bff"/></linearGradient>
+                  </defs>
+                </svg>
+                <div style="position:relative;z-index:2">
+                  <div class="score-num" id="scoreNum">--</div>
+                </div>
+              </div>
+              <div style="height:8px"></div>
+              <div class="score-meta" id="scoreDesc">Status: idle</div>
+            </div>
+
+            <div style="width:200px">
+              <div class="mini-card" style="margin-bottom:8px">
+                <div class="score-meta">Keywords matched</div>
+                <div style="font-weight:700;font-size:18px;color:var(--accent-2)" id="kwCount">--</div>
+              </div>
+              <div class="mini-card">
+                <div class="score-meta">Formatting</div>
+                <div style="font-weight:700" id="fmtScore">--</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>Summary</strong>
+            <div class="muted">Confidence: <span id="confidence">--</span></div>
+          </div>
+          <div id="summary" class="suggestions" style="margin-top:10px">No summary — run an analysis.</div>
+        </div>
+
+        <div class="card">
+          <strong>Strengths</strong>
+          <div id="strengths" class="suggestions"><p class="muted">No suggestions yet — run an analysis.</p></div>
+        </div>
+
+        <div class="card">
+          <strong>Weaknesses</strong>
+          <div id="weaknesses" class="suggestions"><p class="muted">No suggestions yet — run an analysis.</p></div>
+        </div>
+
+        <div class="card">
+          <strong>Suggestions</strong>
+          <div id="suggestions" class="suggestions"><p class="muted">No suggestions yet — run an analysis.</p></div>
+        </div>
+
+        <div class="card">
+          <strong>Raw / Debug</strong>
+          <pre id="raw" class="debug">No output</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-note"><span class="warning">Warning:</span> This demo may expose API keys in browser — use a secure proxy in production.</div>
+  </div>
+
+  <!-- pdf.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+
+  <script>
+    /***** CONFIG *****/
+    const USE_PROXY = false;                     // set true to use PROXY_ENDPOINT
+    const PROXY_ENDPOINT = "/api/gemini-proxy";  // server endpoint to proxy requests (recommended)
+    const API_KEY = "YOUR_GEMINI_API_KEY";       // replace for testing only (do NOT use in production)
+    const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+
+    // Setup pdf.js worker
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.worker.min.js";
+    }
+
+    // UI refs
+    const pasteBox = document.getElementById("pasteBox");
+    const fileInput = document.getElementById("fileInput");
+    const analyzeBtn = document.getElementById("analyzeBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const copyBtn = document.getElementById("copyBtn");
+    const statusEl = document.getElementById("status");
+
+    const scoreNum = document.getElementById("scoreNum");
+    const scoreDesc = document.getElementById("scoreDesc");
+    const progress = document.getElementById("progress");
+    const kwCount = document.getElementById("kwCount");
+    const fmtScore = document.getElementById("fmtScore");
+    const confidenceEl = document.getElementById("confidence");
+
+    const summaryEl = document.getElementById("summary");
+    const strengthsEl = document.getElementById("strengths");
+    const weaknessesEl = document.getElementById("weaknesses");
+    const suggestionsEl = document.getElementById("suggestions");
+    const rawEl = document.getElementById("raw");
+
+    // Drag & drop highlight
+    document.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("drag-over"); });
+    document.addEventListener("dragleave", e => { e.preventDefault(); document.body.classList.remove("drag-over"); });
+    document.addEventListener("drop", e => { e.preventDefault(); document.body.classList.remove("drag-over"); if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]); });
+
+    fileInput.addEventListener("change", e => { if (e.target.files?.[0]) handleFile(e.target.files[0]); });
+
+    // Extract text from PDF using pdf.js
+    async function extractTextFromPDF(file) {
+      try {
+        const arr = new Uint8Array(await file.arrayBuffer());
+        const pdf = await pdfjsLib.getDocument({ data: arr }).promise;
+        let txt = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          const strs = content.items.map(it => it.str || "");
+          txt += strs.join(" ") + "\n\n";
+        }
+        return txt;
+      } catch (err) {
+        throw new Error("PDF extraction failed: " + (err.message||err));
+      }
+    }
+
+    // Basic docx fallback (read as plain text) — client-side docx parsing can be added if needed
+    async function handleFile(file) {
+      status("Extracting file...");
+      const name = (file.name || "").toLowerCase();
+      try {
+        if (name.endsWith(".pdf")) {
+          const txt = await extractTextFromPDF(file);
+          pasteBox.value = txt || pasteBox.value;
+        } else {
+          // for .txt/.doc/.docx attempt to read as text
+          const text = await file.text();
+          pasteBox.value = text || pasteBox.value;
+        }
+        status("Ready");
+      } catch (err) {
+        console.error(err);
+        status("File parse error", true);
+      }
+    }
+
+    function status(msg, isError=false) {
+      statusEl.textContent = msg;
+      statusEl.style.color = isError ? "var(--danger)" : "var(--muted)";
+    }
+
+    // Build prompt asking model to return strict JSON
+    function buildPrompt(resumeText) {
+      return `You are an ATS expert. Analyze the resume text below and return a single JSON object ONLY (no markdown, explanation, or extra text) with fields:
+{
+  "score": number,               // 0-100
+  "summary": string,
+  "strengths": [string],
+  "weaknesses": [string],
+  "suggestions": [string],
+  "keywords_found": [string],
+  "keywords_missing": [string],
+  "formatting_score": number,    // 0-100
+  "experience_match": string,    // Good/Partial/Poor
+  "confidence": number           // 0-100
+}
+Resume:
+----BEGIN RESUME----
+${resumeText}
+----END RESUME----
+Return JSON only.`;
+    }
+
+    // call Gemini model (direct or proxy)
+    async function callModel(promptBody) {
+      if (USE_PROXY) {
+        const r = await fetch(PROXY_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body: promptBody })
+        });
+        if (!r.ok) throw new Error("Proxy error " + r.status);
+        return await r.json();
+      }
+
+      const resp = await fetch(`${API_URL}?key=${API_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(promptBody)
+      });
+      const data = await resp.json();
+      return { status: resp.status, data };
+    }
+
+    // Parse model output safely: expects JSON string as model output
+    function parseModelResponse(modelData) {
+      if (modelData.error) throw new Error(modelData.error.message || "Model error");
+      if (!modelData.candidates || !modelData.candidates.length) throw new Error("No response from model");
+      const text = (modelData.candidates[0].content?.parts?.[0]?.text || "").trim();
+      // Try parse JSON
+      try {
+        const obj = JSON.parse(text);
+        return { parsed: obj, raw: text };
+      } catch (err) {
+        // try find JSON substring
+        const m = text.match(/\{[\s\S]*\}/);
+        if (m) return { parsed: JSON.parse(m[0]), raw: text };
+        throw new Error("Model did not return JSON. See raw output.");
+      }
+    }
+
+    // animate progress circle
+    function setProgress(percent) {
+      const circumference = 2 * Math.PI * 44; // r=44
+      const offset = circumference - (Math.max(0, Math.min(100, percent)) / 100) * circumference;
+      progress.style.strokeDashoffset = offset;
+    }
+
+    // Render structured report to UI
+    function renderReport(report) {
+      const score = Math.round(report.score ?? 0);
+      scoreNum.textContent = score + "%";
+      scoreDesc.textContent = score >= 80 ? "Excellent" : score >= 60 ? "Fair" : "Needs improvement";
+      setProgress(score);
+      kwCount.textContent = (report.keywords_found?.length ?? 0);
+      fmtScore.textContent = `${Math.round(report.formatting_score ?? 0)}/100`;
+      confidenceEl.textContent = `${Math.round(report.confidence ?? 0)}%`;
+
+      summaryEl.textContent = report.summary || "—";
+      fillList(strengthsEl, report.strengths);
+      fillList(weaknessesEl, report.weaknesses);
+      fillList(suggestionsEl, report.suggestions);
+
+      rawEl.textContent = JSON.stringify(report, null, 2);
+    }
+
+    function fillList(container, arr) {
+      container.innerHTML = "";
+      if (!arr || !arr.length) {
+        container.innerHTML = `<p class="muted">No items</p>`;
+        return;
+      }
+      const ul = document.createElement("ul");
+      ul.className = "list";
+      arr.forEach(it => {
+        const li = document.createElement("li"); li.textContent = it; ul.appendChild(li);
+      });
+      container.appendChild(ul);
+    }
+
+    // store last report
+    let lastReport = null;
+
+    // Main analyze flow
+    analyzeBtn.addEventListener("click", async () => {
+      // prepare
+      status("Preparing...");
+      scoreNum.textContent = "--";
+      setProgress(0);
+      rawEl.textContent = "Waiting for AI...";
+      summaryEl.textContent = ""; strengthsEl.innerHTML = ""; weaknessesEl.innerHTML = ""; suggestionsEl.innerHTML = "";
+
+      // get text
+      let text = pasteBox.value.trim();
+      const file = fileInput.files?.[0];
+      if (!text && file) {
+        try {
+          await handleFile(file);
+          text = pasteBox.value.trim();
+        } catch (err) {
+          status("File error", true);
+          rawEl.textContent = err.message || String(err);
+          return;
+        }
+      }
+      if (!text) { status("No resume provided", true); return; }
+
+      // build prompt
+      const prompt = buildPrompt(text);
+      const body = { contents: [{ parts: [{ text: prompt }] }] };
+
+      try {
+        status("Calling AI...");
+        const { status: httpStatus, data } = await callModel(body);
+
+        // If API returned error code (like invalid key)
+        if (data?.error) {
+          console.error("API error:", data.error);
+          status("API Error: " + (data.error.message || "unknown"), true);
+          rawEl.textContent = JSON.stringify(data.error, null, 2);
+          return;
+        }
+
+        // parse model output
+        const { parsed, raw } = parseModelResponse(data);
+        lastReport = parsed;
+        renderReport(parsed);
+        status("done");
+      } catch (err) {
+        console.error(err);
+        status("Error: " + (err.message || err), true);
+        rawEl.textContent = (err.message || String(err)) + "\n\n";
+      }
+    });
+
+    // Clear
+    clearBtn.addEventListener("click", () => {
+      pasteBox.value = "";
+      fileInput.value = "";
+      scoreNum.textContent = "--";
+      setProgress(0);
+      scoreDesc.textContent = "idle";
+      kwCount.textContent = "--";
+      fmtScore.textContent = "--";
+      confidenceEl.textContent = "--";
+      summaryEl.textContent = "No summary";
+      strengthsEl.innerHTML = ""; weaknessesEl.innerHTML = ""; suggestionsEl.innerHTML = "";
+      rawEl.textContent = "No output";
+      status("idle");
+      lastReport = null;
+    });
+
+    // Download report
+    downloadBtn.addEventListener("click", () => {
+      if (!lastReport) { alert("No report to download."); return; }
+      const blob = new Blob([JSON.stringify(lastReport, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = "ats_report.json"; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // Copy to clipboard
+    copyBtn.addEventListener("click", async () => {
+      if (!lastReport) { alert("No report to copy."); return; }
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(lastReport, null, 2));
+        alert("Report copied to clipboard.");
+      } catch (err) {
+        alert("Copy failed: " + err.message);
+      }
+    });
+
+    // Init progress stroke length
+    (function initProgress(){
+      const r = 44; const c = 2 * Math.PI * r;
+      progress.setAttribute("stroke-dasharray", c);
+      progress.style.strokeDashoffset = c;
+    })();
+
+    // initial status
+    status("idle");
+  </script>
+</body>
+</html>
